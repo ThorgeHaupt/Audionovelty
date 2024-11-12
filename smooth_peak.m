@@ -1,4 +1,4 @@
-function peak = smooth_peak(x,fs,varargin)
+function [peak,threshold_local] = smooth_peak(x,fs,varargin)
 %% adaptive thresholding based on local smoothing
 %Input
 %x = signal 1x sample points
@@ -27,23 +27,30 @@ function peak = smooth_peak(x,fs,varargin)
 
 opt = propertylist2struct(varargin{:});
 opt = set_defaults(opt,...
-    'median_len',1024,...
+    'median_len',128,...
     'offset_rel',0.05,...
     'sigma',4,...
     'sec',1,...
     'plt',0);
     
+%set the offset the be above the noise floor
+[N,edges] = histcounts(x,20)
+edges(1) = [];
+offset = edges(2);
 
-offset = mean(x) * opt.offset_rel;
+
+% offset = mean(x) * opt.offset_rel;
 frame = 1*fs;
-w = gauss(ceil(frame),opt.sigma);
+w = fspecial('gaussian',[1,ceil(frame)],opt.sigma);
 w = w/sum(w);
 x_conv = conv(x,w,'same');
+%what if i normalize the x_conv
+x_conv = normalize(x_conv,'range');
 threshold_local = medfilt1(x_conv,opt.median_len) + offset;
 peaks = [];
 for i = 2:size(x_conv,2)-1
     if x_conv(i-1) < x_conv(i) && x_conv(i) > x_conv(i+1)
-        if x(i) > threshold_local(i)
+        if x(i) > threshold_local(i) || x(i+1) > threshold_local(i) || x(i-1) > threshold_local(i)
             peaks = [peaks i];
             
         end
@@ -57,13 +64,14 @@ end
 peak(peaks) = 1;
 
 if opt.plt
-    figure(10),clf
-    plot(x)
+    figure,clf
+    plot(x,'linew',2)
     hold on
     plot(x_conv)
     hold on
-    plot(threshold_local)
+    plot(threshold_local,'linew',2)
     hold on 
-    plot(peak)
-    legend('novelty','smoothed','local threshold', 'peaks detected')
+    plot(peak,'linew',2)
+    legend('novelty','local threshold', 'peaks detected')
+    set(gca,'Xlim',[0 40*100])
 end

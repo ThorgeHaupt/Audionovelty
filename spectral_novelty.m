@@ -1,4 +1,4 @@
-function [novelty, fs_new] = spectral_novelty(x,fs,varargin)
+function [novelty, fs_new,nov_nnoise] = spectral_novelty(x,fs,varargin)
 %% spectral based novelty
 %derives the spectral change at a diff frequency bands over time
 %
@@ -37,8 +37,8 @@ function [novelty, fs_new] = spectral_novelty(x,fs,varargin)
 
 opt = propertylist2struct(varargin{:});
 opt = set_defaults(opt,...
-    'N',2048,...
-    'H',128,...
+    'N',512,...
+    'H',220,...
     'take_log',1,...
     'gamma',10,...
     'norm',1,...
@@ -47,6 +47,7 @@ opt = set_defaults(opt,...
 
 N = opt.N;
 H = opt.H;
+M = opt.M;
 gamma = opt.gamma;
 
 %short fourier transformation
@@ -57,13 +58,19 @@ Y = log(1 + gamma * abs(X));
 
 %take the derivative
 Y_diff = diff(Y,1,2);
+
 Y_diff(Y_diff < 0) = 0;
+nov_nnoise = Y_diff;
 nov = sum(Y_diff,1);
 nov = cat(2,nov, zeros(size(Y,2)-size(Y_diff,2),1)');
-
+%smooth that motherfucker
+% nov = movmean(nov,6)
+% 
+% nov = nov - mean(nov);
+% nov = abs(nov);
 %moving average
 fs_new = fs/(N-H);
-M = (0.1*fs_new);
+M = (M*fs_new);
 l_avg = cmp_loc_avg(nov,ceil(M));
 nov_norm =nov - l_avg;
 nov_norm(nov_norm<0) = 0;
@@ -73,10 +80,10 @@ if opt.norm
     nov_norm = nov_norm/max(nov_norm);
     novelty = nov_norm;
 end
-sec = 15;
+sec = 47;
 
 if opt.plt
-    figure(2),clf
+    figure,clf
     subplot(4,1,1)
     plot(x)
     set(gca,'Xlim',[0 sec*fs])
